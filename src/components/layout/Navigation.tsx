@@ -1,4 +1,3 @@
-// src/components/layout/Navigation.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -35,28 +34,25 @@ import {
 import { categoryApi, searchApi } from '@/lib/apiClient';
 import { Category } from '@/types';
 
-// Search result interface
-interface SearchResult {
-    id: string;
-    type: 'product' | 'category';
-    name: string;
-    description: string;
-    metadata: {
-        price?: number;
-        [key: string]: any;
-    };
-}
+
+const dummyCategories: Category[] = [
+    { id: '1', name: 'Living Room', description: 'Sofas, Chairs & Tables', createdAt: new Date(), updatedAt: new Date() },
+    { id: '2', name: 'Bedroom', description: 'Beds, Wardrobes & Nightstands', createdAt: new Date(), updatedAt: new Date() },
+    { id: '3', name: 'Dining', description: 'Dining Tables & Chairs', createdAt: new Date(), updatedAt: new Date() },
+    { id: '4', name: 'Office', description: 'Desks & Office Chairs', createdAt: new Date(), updatedAt: new Date() },
+    { id: '5', name: 'Outdoor', description: 'Patio Furniture & Decor', createdAt: new Date(), updatedAt: new Date() },
+];
 
 export default function Navigation() {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>(dummyCategories);
     const [isScrolled, setIsScrolled] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
 
-    // Handle scroll effect
     useEffect(() => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 10);
@@ -65,51 +61,40 @@ export default function Navigation() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Fetch categories on mount
     useEffect(() => {
         const fetchCategories = async () => {
             try {
+                setIsLoading(true);
                 const response = await categoryApi.getAll();
-                // Your API returns { categories: Category[], message: string }
-                const categoriesData = response || [];
 
-                if (categoriesData.length === 0) {
-                    // Fallback demo categories if API returns empty
-                    setCategories([
-                        { id: '1', name: 'Living Room', description: 'Sofas, Chairs & Tables' },
-                        { id: '2', name: 'Bedroom', description: 'Beds, Wardrobes & Nightstands' },
-                        { id: '3', name: 'Dining', description: 'Dining Tables & Chairs' },
-                        { id: '4', name: 'Office', description: 'Desks & Office Chairs' },
-                        { id: '5', name: 'Outdoor', description: 'Patio Furniture & Decor' },
-                    ]);
-                } else {
-                    setCategories(categoriesData);
+                if (Array.isArray(response)) {
+                    if (response.length > 0) {
+                        setCategories(response);
+                    }
+                } else if (response && typeof response === 'object') {
+                    if (response && Array.isArray(response) && (response as Category[]).length > 0) {
+                        setCategories(response);
+                    }
+                    else if (response && Array.isArray(response) && (response as Category[]).length > 0) {
+                        setCategories(response);
+                    }
                 }
-
             } catch (error) {
                 console.error('Error fetching categories:', error);
-                // Fallback categories if API fails
-                setCategories([
-                    { id: '1', name: 'Living Room', description: 'Sofas, Chairs & Tables' },
-                    { id: '2', name: 'Bedroom', description: 'Beds, Wardrobes & Nightstands' },
-                    { id: '3', name: 'Dining', description: 'Dining Tables & Chairs' },
-                    { id: '4', name: 'Office', description: 'Desks & Office Chairs' },
-                    { id: '5', name: 'Outdoor', description: 'Patio Furniture & Decor' },
-                ]);
+            } finally {
+                setIsLoading(false);
             }
         };
         fetchCategories();
     }, []);
 
-    // Handle search with debouncing
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
             if (searchQuery.length > 2) {
                 try {
                     const response = await searchApi.search(searchQuery);
-                    // Adjust based on your search API response structure
-                    const results = response.results || response || [];
-                    setSearchResults(results);
+                    const results = response.results || response || response || [];
+                    setSearchResults(Array.isArray(results) ? results : []);
                 } catch (error) {
                     console.error('Search failed:', error);
                     setSearchResults([]);
@@ -131,18 +116,15 @@ export default function Navigation() {
         }
     };
 
-    const handleResultClick = (result: SearchResult) => {
-        if (result.type === 'product') {
-            router.push(`/products/${result.id}`);
-        } else if (result.type === 'category') {
-            router.push(`/categories/${result.id}`);
-        }
+    const handleResultClick = (result: any) => {
+        const route = result.type === 'product' ? `/products/${result.id}` : `/categories/${result.id}`;
+        router.push(route);
         setIsSearchOpen(false);
         setSearchQuery('');
     };
 
-    // Always ensure categories is an array before mapping
-    const safeCategories = Array.isArray(categories) ? categories : [];
+    // Always show at least dummy categories
+    const displayCategories = categories.length > 0 ? categories : dummyCategories;
 
     return (
         <nav className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled
@@ -177,45 +159,43 @@ export default function Navigation() {
                                     }`} />
                             </Link>
 
-                            {/* Shop Dropdown */}
-                            {safeCategories.length > 0 && (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <button className="text-sm font-medium text-gray-700 hover:text-emerald-700 transition-all duration-200 flex items-center space-x-1 group">
-                                            <span>Shop</span>
-                                            <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                            <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-emerald-600 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-200" />
-                                        </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                        align="center"
-                                        className="w-72 p-2 bg-white border border-gray-100 shadow-xl rounded-xl"
-                                    >
-                                        <div className="grid gap-1">
-                                            {safeCategories.map((category) => (
-                                                <DropdownMenuItem key={category.id} asChild>
-                                                    <Link
-                                                        href={`/categories/${category.id}`}
-                                                        className="flex items-center justify-between p-3 hover:bg-emerald-50 rounded-lg cursor-pointer transition-all duration-200 group/item"
-                                                    >
-                                                        <div className="flex flex-col items-start">
-                                                            <span className="font-medium text-gray-900 group-hover/item:text-emerald-800">
-                                                                {category.name}
-                                                            </span>
-                                                            <span className="text-xs text-gray-500">
-                                                                {category.description}
-                                                            </span>
-                                                        </div>
-                                                        <div className="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center transition-colors group-hover/item:bg-emerald-200">
-                                                            <div className="h-2 w-2 rounded-full bg-emerald-600" />
-                                                        </div>
-                                                    </Link>
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </div>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            )}
+                            {/* Shop Dropdown - Always show */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="text-sm font-medium text-gray-700 hover:text-emerald-700 transition-all duration-200 flex items-center space-x-1 group">
+                                        <span>Shop</span>
+                                        <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                        <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-emerald-600 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-200" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="center"
+                                    className="w-72 p-2 bg-white border border-gray-100 shadow-xl rounded-xl"
+                                >
+                                    <div className="grid gap-1">
+                                        {displayCategories.map((category) => (
+                                            <DropdownMenuItem key={category.id} asChild>
+                                                <Link
+                                                    href={`/categories/${category.id}`}
+                                                    className="flex items-center justify-between p-3 hover:bg-emerald-50 rounded-lg cursor-pointer transition-all duration-200 group/item"
+                                                >
+                                                    <div className="flex flex-col items-start">
+                                                        <span className="font-medium text-gray-900 group-hover/item:text-emerald-800">
+                                                            {category.name}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500">
+                                                            {category.description}
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center transition-colors group-hover/item:bg-emerald-200">
+                                                        <div className="h-2 w-2 rounded-full bg-emerald-600" />
+                                                    </div>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </div>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
 
                             <Link
                                 href="/faq"
@@ -261,9 +241,9 @@ export default function Navigation() {
                                     {/* Search Results */}
                                     {searchResults.length > 0 && (
                                         <div className="max-h-96 overflow-y-auto">
-                                            {searchResults.slice(0, 5).map((result) => (
+                                            {searchResults.slice(0, 5).map((result, index) => (
                                                 <button
-                                                    key={`${result.type}-${result.id}`}
+                                                    key={result.id || `result-${index}`}
                                                     onClick={() => handleResultClick(result)}
                                                     className="flex items-center w-full p-4 hover:bg-gray-50 border-b last:border-b-0 transition-colors duration-150 text-left"
                                                 >
@@ -278,7 +258,7 @@ export default function Navigation() {
                                                     <div className="flex-1">
                                                         <div className="flex items-center justify-between">
                                                             <p className="text-sm font-medium text-gray-900 line-clamp-1">
-                                                                {result.name}
+                                                                {result.name || 'Untitled'}
                                                             </p>
                                                             <span className={`text-xs px-2 py-1 rounded ${result.type === 'product'
                                                                 ? 'bg-emerald-100 text-emerald-800'
@@ -288,11 +268,11 @@ export default function Navigation() {
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-gray-600 mt-1 line-clamp-1">
-                                                            {result.description}
+                                                            {result.description || 'No description'}
                                                         </p>
-                                                        {'price' in result.metadata && (
+                                                        {result.price && (
                                                             <p className="text-sm font-semibold text-emerald-700 mt-1">
-                                                                ${result.metadata.price}
+                                                                ${result.price}
                                                             </p>
                                                         )}
                                                     </div>
@@ -371,9 +351,9 @@ export default function Navigation() {
 
                                 {searchResults.length > 0 && (
                                     <div className="max-h-80 overflow-y-auto">
-                                        {searchResults.slice(0, 3).map((result) => (
+                                        {searchResults.slice(0, 3).map((result, index) => (
                                             <button
-                                                key={`${result.type}-${result.id}`}
+                                                key={result.id || `mobile-result-${index}`}
                                                 onClick={() => handleResultClick(result)}
                                                 className="flex items-center w-full p-4 hover:bg-gray-50 border-b last:border-b-0 text-left"
                                             >
@@ -387,11 +367,11 @@ export default function Navigation() {
                                                 </div>
                                                 <div className="flex-1">
                                                     <p className="text-sm font-medium text-gray-900">
-                                                        {result.name}
+                                                        {result.name || 'Untitled'}
                                                     </p>
-                                                    {'price' in result.metadata && (
+                                                    {result.price && (
                                                         <p className="text-sm font-semibold text-emerald-700">
-                                                            ${result.metadata.price}
+                                                            ${result.price}
                                                         </p>
                                                     )}
                                                 </div>
@@ -442,38 +422,36 @@ export default function Navigation() {
                                                 </Link>
                                             </div>
 
-                                            {safeCategories.length > 0 && (
-                                                <div>
-                                                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider px-3 mb-3">
-                                                        Shop Categories
-                                                    </p>
-                                                    <div className="space-y-2">
-                                                        {safeCategories.map((category) => (
-                                                            <Link
-                                                                key={category.id}
-                                                                href={`/categories/${category.id}`}
-                                                                className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50 transition-colors group"
-                                                                onClick={() => document.dispatchEvent(new Event('sheet-close'))}
-                                                            >
-                                                                <div className="flex items-center space-x-3">
-                                                                    <div className="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                                                                        <div className="h-2 w-2 rounded-full bg-emerald-600" />
-                                                                    </div>
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-sm font-medium text-gray-900 group-hover:text-emerald-800">
-                                                                            {category.name}
-                                                                        </span>
-                                                                        <span className="text-xs text-gray-500">
-                                                                            {category.description}
-                                                                        </span>
-                                                                    </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider px-3 mb-3">
+                                                    Shop Categories
+                                                </p>
+                                                <div className="space-y-2">
+                                                    {displayCategories.map((category) => (
+                                                        <Link
+                                                            key={category.id}
+                                                            href={`/categories/${category.id}`}
+                                                            className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50 transition-colors group"
+                                                            onClick={() => document.dispatchEvent(new Event('sheet-close'))}
+                                                        >
+                                                            <div className="flex items-center space-x-3">
+                                                                <div className="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                                                                    <div className="h-2 w-2 rounded-full bg-emerald-600" />
                                                                 </div>
-                                                                <ChevronDown className="h-4 w-4 text-gray-400 -rotate-90" />
-                                                            </Link>
-                                                        ))}
-                                                    </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-medium text-gray-900 group-hover:text-emerald-800">
+                                                                        {category.name}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {category.description}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <ChevronDown className="h-4 w-4 text-gray-400 -rotate-90" />
+                                                        </Link>
+                                                    ))}
                                                 </div>
-                                            )}
+                                            </div>
 
                                             <div>
                                                 <Link

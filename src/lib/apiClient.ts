@@ -1,8 +1,36 @@
 // src/lib/api-client.ts
 import axios, { AxiosResponse } from 'axios';
-import { Admin, Category, Product, CartItem, Order, OrderStatus, User, SearchResult, SearchResponse } from '@/types';
+import { Admin, Category, Product, CartItem, Order, OrderStatus, User, SearchResult, SearchResponse, ApplicationLog, ApplicationLogLevel, LogSource, LogStats, CategoryProductCount, ProductStats, StockStatus, TopProduct, OrderStats, RevenueDataPoint, TopUser } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:6001/api';
+
+abstract class BaseService {
+    protected accessToken: string | null = null;
+
+    constructor(accessToken?: string) {
+        this.accessToken = accessToken || this.getStoredAccessToken();
+    }
+
+    protected getStoredAccessToken(): string | null {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('authToken');
+        }
+        return null;
+    }
+
+    protected getAuthHeaders(contentType: string = 'application/json') {
+        const token = this.accessToken || this.getStoredAccessToken();
+        const headers: Record<string, string> = {
+            'Content-Type': contentType
+        };
+
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        return headers;
+    }
+}
 
 export class CategoryService {
     private accessToken: string | null = null;
@@ -131,6 +159,58 @@ export class ProductService {
             return response.data;
         } catch (error) {
             console.error("Error fetching product:", error);
+            throw error;
+        }
+    }
+
+    async getStats(): Promise<{ stats: ProductStats, message: string }> {
+        try {
+            const response: AxiosResponse<{ stats: ProductStats, message: string }> = await axios.get(
+                `${API_BASE_URL}/product/get-stats`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching product stats:", error);
+            throw error;
+        }
+    }
+
+    async getStockStatus(): Promise<{ stockStatus: StockStatus, message: string }> {
+        try {
+            const response: AxiosResponse<{ stockStatus: StockStatus, message: string }> = await axios.get(
+                `${API_BASE_URL}/product/get-stock-status`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching stock status:", error);
+            throw error;
+        }
+    }
+
+    async getTopProducts(limit: number = 10): Promise<{ topProducts: TopProduct[], limit: number, message: string }> {
+        try {
+            const response: AxiosResponse<{ topProducts: TopProduct[], limit: number, message: string }> = await axios.get(
+                `${API_BASE_URL}/product/get-top-products?limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching top products:", error);
+            throw error;
+        }
+    }
+
+    async getProductsByCategory(): Promise<{ productsByCategory: CategoryProductCount[], message: string }> {
+        try {
+            const response: AxiosResponse<{ productsByCategory: CategoryProductCount[], message: string }> = await axios.get(
+                `${API_BASE_URL}/product/get-products-by-category`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching products by category:", error);
             throw error;
         }
     }
@@ -433,6 +513,19 @@ export class OrderService {
         }
     }
 
+    async getByStatus(status: OrderStatus): Promise<{ orders: Order[], message: string }> {
+        try {
+            const response: AxiosResponse<{orders: Order[], message: string}> = await axios.get(
+                `${API_BASE_URL}/order/get-by-status/${status}`,
+                { headers: this.getAuthHeaders() }
+            )
+            return response.data
+        } catch (error) {
+            console.error("Error fetching orders:", error);
+            throw error;
+        }
+    }
+
     async updateStatus(id: string, statusData: { status: OrderStatus }): Promise<{ order: Order, message: string }> {
         try {
             const response: AxiosResponse<{ order: Order, message: string }> = await axios.put(
@@ -456,6 +549,78 @@ export class OrderService {
             return response.data;
         } catch (error) {
             console.error("Error deleting order:", error);
+            throw error;
+        }
+    }
+
+    async getStats(timeframe: 'today' | 'week' | 'month' | 'year' | 'all' = 'all'): Promise<{
+        stats: OrderStats,
+        timeframe: string,
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                stats: OrderStats,
+                timeframe: string,
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/order/get-stats?timeframe=${timeframe}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching order stats:", error);
+            throw error;
+        }
+    }
+
+    async getRevenueTrend(
+        startDate?: string, // ISO string
+        endDate?: string // ISO string
+    ): Promise<{
+        revenueData: RevenueDataPoint[],
+        startDate: string,
+        endDate: string,
+        message: string
+    }> {
+        try {
+            const params = new URLSearchParams();
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            const url = `${API_BASE_URL}/order/get-revenue-trend${params.toString() ? '?' + params.toString() : ''}`;
+
+            const response: AxiosResponse<{
+                revenueData: RevenueDataPoint[],
+                startDate: string,
+                endDate: string,
+                message: string
+            }> = await axios.get(url, { headers: this.getAuthHeaders() });
+
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching revenue trend:", error);
+            throw error;
+        }
+    }
+
+    async getTopUsers(limit: number = 10): Promise<{
+        topUsers: TopUser[],
+        limit: number,
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                topUsers: TopUser[],
+                limit: number,
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/order/get-top-users?limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching top users:", error);
             throw error;
         }
     }
@@ -728,7 +893,262 @@ export class AdminService {
     }
 }
 
-// Convenience exports for backward compatibility
+export class LogService extends BaseService {
+    async getAllLogs(
+        page: number = 1,
+        limit: number = 50,
+        filters?: {
+            search?: string;
+            level?: ApplicationLogLevel;
+            source?: LogSource;
+            userId?: string;
+            statusCode?: number;
+            startDate?: string;
+            endDate?: string;
+        }
+    ): Promise<{
+        logs: ApplicationLog[],
+        pagination: {
+            page: number,
+            limit: number,
+            total: number,
+            totalPages: number
+        },
+        message: string
+    }> {
+        try {
+            const params = new URLSearchParams();
+            params.append('page', page.toString());
+            params.append('limit', limit.toString());
+
+            if (filters?.search) params.append('search', filters.search);
+            if (filters?.level) params.append('level', filters.level);
+            if (filters?.source) params.append('source', filters.source);
+            if (filters?.userId) params.append('userId', filters.userId);
+            if (filters?.statusCode) params.append('statusCode', filters.statusCode.toString());
+            if (filters?.startDate) params.append('startDate', filters.startDate);
+            if (filters?.endDate) params.append('endDate', filters.endDate);
+
+            const response: AxiosResponse<{
+                logs: ApplicationLog[],
+                pagination: {
+                    page: number,
+                    limit: number,
+                    total: number,
+                    totalPages: number
+                },
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-all-logs?${params.toString()}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching all logs:", error);
+            throw error;
+        }
+    }
+
+    async getLogStats(
+        timeframe: 'hour' | 'day' | 'week' | 'month' = 'day'
+    ): Promise<{
+        stats: LogStats,
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                stats: LogStats,
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-log-stats?timeframe=${timeframe}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching log stats:", error);
+            throw error;
+        }
+    }
+
+    async getErrorLogs(
+        page: number = 1,
+        limit: number = 50
+    ): Promise<{
+        logs: ApplicationLog[],
+        pagination: {
+            page: number,
+            limit: number,
+            total: number,
+            totalPages: number
+        },
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                logs: ApplicationLog[],
+                pagination: {
+                    page: number,
+                    limit: number,
+                    total: number,
+                    totalPages: number
+                },
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-error-logs?page=${page}&limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching error logs:", error);
+            throw error;
+        }
+    }
+
+    async getLogById(id: string): Promise<{
+        log: ApplicationLog,
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                log: ApplicationLog,
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-log-by-id/${id}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching log by ID:", error);
+            throw error;
+        }
+    }
+
+    async cleanupLogs(daysToKeep: number = 30): Promise<{
+        deletedCount: number,
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                deletedCount: number,
+                message: string
+            }> = await axios.delete(
+                `${API_BASE_URL}/log/cleanup-logs?days=${daysToKeep}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error cleaning up logs:", error);
+            throw error;
+        }
+    }
+
+    async getLogsByLevel(
+        level: ApplicationLogLevel,
+        page: number = 1,
+        limit: number = 50
+    ): Promise<{
+        logs: ApplicationLog[],
+        pagination: {
+            page: number,
+            limit: number,
+            total: number,
+            totalPages: number
+        },
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                logs: ApplicationLog[],
+                pagination: {
+                    page: number,
+                    limit: number,
+                    total: number,
+                    totalPages: number
+                },
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-logs-by-level/${level}?page=${page}&limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error(`Error fetching ${level} logs:`, error);
+            throw error;
+        }
+    }
+
+    async getLogsBySource(
+        source: LogSource,
+        page: number = 1,
+        limit: number = 50
+    ): Promise<{
+        logs: ApplicationLog[],
+        pagination: {
+            page: number,
+            limit: number,
+            total: number,
+            totalPages: number
+        },
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                logs: ApplicationLog[],
+                pagination: {
+                    page: number,
+                    limit: number,
+                    total: number,
+                    totalPages: number
+                },
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-logs-by-source/${source}?page=${page}&limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error(`Error fetching ${source} logs:`, error);
+            throw error;
+        }
+    }
+
+    async getLogsByDateRange(
+        startDate: string, // ISO string
+        endDate: string, // ISO string
+        page: number = 1,
+        limit: number = 50
+    ): Promise<{
+        logs: ApplicationLog[],
+        pagination: {
+            page: number,
+            limit: number,
+            total: number,
+            totalPages: number
+        },
+        message: string
+    }> {
+        try {
+            const response: AxiosResponse<{
+                logs: ApplicationLog[],
+                pagination: {
+                    page: number,
+                    limit: number,
+                    total: number,
+                    totalPages: number
+                },
+                message: string
+            }> = await axios.get(
+                `${API_BASE_URL}/log/get-logs-by-date-range?startDate=${startDate}&endDate=${endDate}&page=${page}&limit=${limit}`,
+                { headers: this.getAuthHeaders() }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching logs by date range:", error);
+            throw error;
+        }
+    }
+}
+
 export const categoryApi = new CategoryService();
 export const productApi = new ProductService();
 export const searchApi = new SearchService();
@@ -736,3 +1156,4 @@ export const cartApi = new CartService();
 export const orderApi = new OrderService();
 export const userApi = new UserService();
 export const adminApi = new AdminService();
+export const logApi = new LogService(); 

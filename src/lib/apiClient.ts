@@ -61,11 +61,11 @@ export class CategoryService {
 
     async getAll(): Promise<Category[]> {
         try {
-            const response: AxiosResponse<Category[]> = await axios.get(
+            const response: AxiosResponse<{categories: Category[], message: string}> = await axios.get(
                 `${API_BASE_URL}/category/get-all`,
                 { headers: this.getAuthHeaders() }
             );
-            return response.data;
+            return response.data.categories;
         } catch (error) {
             console.error("Error fetching all categories:", error);
             throw error;

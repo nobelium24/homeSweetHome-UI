@@ -2,242 +2,382 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
-    LogOut,
     Users,
     Package,
     ShoppingCart,
-    BarChart3,
-    Settings,
+    DollarSign,
+    TrendingUp,
+    TrendingDown,
     Calendar,
-    DollarSign
+    Clock,
+    AlertCircle,
+    CheckCircle,
+    XCircle
 } from 'lucide-react';
-import { AdminService } from '@/lib/apiClient';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { productApi, orderApi, userApi, logApi } from '@/lib/apiClient';
+import { ProductStats, OrderStats, LogStats, OrderStatus } from '@/types';
 
-export default function AdminDashboardPage() {
-    const router = useRouter();
-    const [adminEmail, setAdminEmail] = useState('');
-    const [stats, setStats] = useState({
-        totalUsers: 0,
-        totalProducts: 0,
-        totalOrders: 0,
-        totalRevenue: 0,
-    });
+export default function DashboardPage() {
+    const [loading, setLoading] = useState(true);
+    const [productStats, setProductStats] = useState<ProductStats | null>(null);
+    const [orderStats, setOrderStats] = useState<OrderStats | null>(null);
+    const [logStats, setLogStats] = useState<LogStats | null>(null);
+    const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'year'>('week');
 
     useEffect(() => {
-        const email = localStorage.getItem('adminEmail');
-        if (email) {
-            setAdminEmail(email);
-        }
+        const fetchDashboardData = async () => {
+            try {
+                setLoading(true);
 
-        // In a real app, you'd fetch these stats from your API
-        // For now, using dummy data
-        setStats({
-            totalUsers: 1247,
-            totalProducts: 89,
-            totalOrders: 356,
-            totalRevenue: 124560,
-        });
-    }, []);
+                // Fetch all data in parallel
+                const [productData, orderData, logData] = await Promise.all([
+                    productApi.getStats(),
+                    orderApi.getStats(timeframe),
+                    logApi.getLogStats('day')
+                ]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('adminEmail');
-        router.push('/admin/login');
-    };
+                setProductStats(productData.stats);
+                setOrderStats(orderData.stats);
+                setLogStats(logData.stats);
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [timeframe]);
 
     const statCards = [
         {
-            title: 'Total Users',
-            value: stats.totalUsers.toLocaleString(),
-            icon: Users,
-            color: 'bg-blue-500',
-            change: '+12%',
-        },
-        {
-            title: 'Total Products',
-            value: stats.totalProducts.toLocaleString(),
-            icon: Package,
+            title: 'Total Revenue',
+            value: orderStats ? `$${orderStats.totalRevenue.toLocaleString()}` : '$0',
+            icon: DollarSign,
             color: 'bg-emerald-500',
-            change: '+5%',
+            change: '+12.5%',
+            trend: 'up',
+            description: `From ${timeframe}`
         },
         {
             title: 'Total Orders',
-            value: stats.totalOrders.toLocaleString(),
+            value: orderStats ? orderStats.totalOrders.toLocaleString() : '0',
             icon: ShoppingCart,
-            color: 'bg-purple-500',
-            change: '+23%',
+            color: 'bg-blue-500',
+            change: '+8.2%',
+            trend: 'up',
+            description: `${orderStats?.averageOrderValue ? `Avg: $${orderStats.averageOrderValue}` : ''}`
         },
         {
-            title: 'Total Revenue',
-            value: `$${stats.totalRevenue.toLocaleString()}`,
-            icon: DollarSign,
-            color: 'bg-amber-500',
-            change: '+18%',
+            title: 'Total Products',
+            value: productStats ? productStats.totalProducts.toLocaleString() : '0',
+            icon: Package,
+            color: 'bg-purple-500',
+            change: '+3.1%',
+            trend: 'up',
+            description: `${productStats?.totalCategories ? `${productStats.totalCategories} categories` : ''}`
         },
+        {
+            title: 'System Health',
+            value: logStats ? `${(100 - (logStats.errorRate * 100)).toFixed(1)}%` : '100%',
+            icon: CheckCircle,
+            color: logStats?.errorRate && logStats.errorRate > 0.1 ? 'bg-amber-500' : 'bg-emerald-500',
+            change: logStats?.errorRate ? `${(logStats.errorRate * 100).toFixed(1)}% errors` : '0% errors',
+            trend: logStats?.errorRate && logStats.errorRate > 0.1 ? 'down' : 'up',
+            description: 'Uptime'
+        }
     ];
 
-    const quickActions = [
-        { label: 'Manage Products', icon: Package, href: '/admin/products' },
-        { label: 'View Orders', icon: ShoppingCart, href: '/admin/orders' },
-        { label: 'User Management', icon: Users, href: '/admin/users' },
-        { label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
-        { label: 'Calendar', icon: Calendar, href: '/admin/calendar' },
-        { label: 'Settings', icon: Settings, href: '/admin/settings' },
-    ];
+    const orderStatusStats = orderStats ? [
+        { status: OrderStatus.PENDING, count: orderStats.pendingOrders, color: 'bg-yellow-500' },
+        { status: OrderStatus.CONFIRMED, count: orderStats.confirmedOrders, color: 'bg-blue-500' },
+        { status: OrderStatus.PROCESSING, count: orderStats.processingOrders, color: 'bg-purple-500' },
+        { status: OrderStatus.SHIPPED, count: orderStats.shippedOrders, color: 'bg-indigo-500' },
+        { status: OrderStatus.DELIVERED, count: orderStats.deliveredOrders, color: 'bg-emerald-500' },
+        { status: OrderStatus.CANCELLED, count: orderStats.cancelledOrders, color: 'bg-red-500' },
+    ] : [];
+
+    const getStatusLabel = (status: OrderStatus) => {
+        return status.charAt(0).toUpperCase() + status.slice(1);
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <div className="h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading dashboard data...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="space-y-6">
             {/* Header */}
-            <header className="bg-white shadow-sm border-b">
-                <div className="container mx-auto px-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-                            <p className="text-sm text-gray-600">
-                                Welcome back, {adminEmail || 'Admin'}
-                            </p>
-                        </div>
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                        >
-                            <LogOut className="h-4 w-4" />
-                            <span>Logout</span>
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <div>
+                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+                <p className="text-gray-600 mt-2">
+                    Overview of your furniture store performance
+                </p>
+            </div>
 
-            {/* Main Content */}
-            <main className="container mx-auto px-4 py-8">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    {statCards.map((stat, index) => (
-                        <div key={index} className="bg-white rounded-xl p-6 shadow-sm border">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-600 mb-2">{stat.title}</p>
-                                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                                    <p className="text-xs text-emerald-600 mt-2">{stat.change} from last month</p>
-                                </div>
-                                <div className={`${stat.color} h-12 w-12 rounded-lg flex items-center justify-center`}>
-                                    <stat.icon className="h-6 w-6 text-white" />
-                                </div>
-                            </div>
-                        </div>
+            {/* Timeframe Selector */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                    <span className="text-sm text-gray-600">Timeframe:</span>
+                </div>
+                <div className="flex space-x-2">
+                    {(['today', 'week', 'month', 'year'] as const).map((time) => (
+                        <Button
+                            key={time}
+                            variant={timeframe === time ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setTimeframe(time)}
+                            className={timeframe === time ? 'bg-emerald-600' : ''}
+                        >
+                            {time.charAt(0).toUpperCase() + time.slice(1)}
+                        </Button>
                     ))}
                 </div>
+            </div>
 
-                {/* Quick Actions */}
-                <div className="bg-white rounded-xl p-6 shadow-sm border mb-8">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        {quickActions.map((action, index) => (
-                            <button
-                                key={index}
-                                onClick={() => router.push(action.href)}
-                                className="flex flex-col items-center p-4 rounded-lg border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors group"
-                            >
-                                <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center mb-3 group-hover:bg-emerald-200 transition-colors">
-                                    <action.icon className="h-5 w-5 text-emerald-700" />
-                                </div>
-                                <span className="text-sm font-medium text-gray-700 text-center">
-                                    {action.label}
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {statCards.map((stat, index) => (
+                    <Card key={index}>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-gray-600">
+                                {stat.title}
+                            </CardTitle>
+                            <div className={`${stat.color} h-10 w-10 rounded-lg flex items-center justify-center`}>
+                                <stat.icon className="h-5 w-5 text-white" />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stat.value}</div>
+                            <div className="flex items-center mt-2">
+                                {stat.trend === 'up' ? (
+                                    <TrendingUp className="h-4 w-4 text-emerald-500 mr-1" />
+                                ) : (
+                                    <TrendingDown className="h-4 w-4 text-red-500 mr-1" />
+                                )}
+                                <span className={`text-sm ${stat.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {stat.change}
                                 </span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                                <span className="text-sm text-gray-500 ml-2">{stat.description}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
 
-                {/* Recent Activity & Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Recent Orders */}
-                    <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-                            <button className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
-                                View All
-                            </button>
-                        </div>
+            {/* Second Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Order Status */}
+                <Card className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Order Status</CardTitle>
+                        <CardDescription>
+                            Distribution of orders by status
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
                         <div className="space-y-4">
-                            {[1, 2, 3, 4, 5].map((order) => (
-                                <div key={order} className="flex items-center justify-between p-4 rounded-lg border border-gray-100 hover:bg-gray-50">
-                                    <div>
-                                        <p className="font-medium text-gray-900">Order #{1000 + order}</p>
-                                        <p className="text-sm text-gray-600">John Doe • Today</p>
+                            {orderStatusStats.map((statusStat) => (
+                                <div key={statusStat.status} className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`h-3 w-3 rounded-full ${statusStat.color}`} />
+                                        <span className="text-sm font-medium">{getStatusLabel(statusStat.status)}</span>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-semibold text-emerald-700">$299.99</p>
-                                        <span className="inline-block px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-800 rounded-full">
-                                            Completed
-                                        </span>
+                                    <div className="flex items-center space-x-4">
+                                        <span className="text-sm font-semibold">{statusStat.count}</span>
+                                        <div className="h-2 w-32 bg-gray-200 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full ${statusStat.color} rounded-full`}
+                                                style={{
+                                                    width: `${orderStats ? (statusStat.count / orderStats.totalOrders) * 100 : 0}%`
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </CardContent>
+                </Card>
 
-                    {/* System Status */}
-                    <div className="bg-white rounded-xl p-6 shadow-sm border">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">System Status</h2>
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-gray-600">API Health</span>
-                                    <span className="text-sm font-medium text-emerald-600">Healthy</span>
+                {/* Stock Status */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Stock Status</CardTitle>
+                        <CardDescription>
+                            Inventory overview
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {productStats ? (
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">In Stock</span>
+                                        <span className="text-sm font-semibold">
+                                            {productStats.totalProducts - productStats.outOfStock - productStats.lowStock}
+                                        </span>
+                                    </div>
+                                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-emerald-500 rounded-full"
+                                            style={{
+                                                width: `${((productStats.totalProducts - productStats.outOfStock - productStats.lowStock) / productStats.totalProducts) * 100}%`
+                                            }}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 w-full"></div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">Low Stock</span>
+                                        <span className="text-sm font-semibold">{productStats.lowStock}</span>
+                                    </div>
+                                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-amber-500 rounded-full"
+                                            style={{
+                                                width: `${(productStats.lowStock / productStats.totalProducts) * 100}%`
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">Out of Stock</span>
+                                        <span className="text-sm font-semibold">{productStats.outOfStock}</span>
+                                    </div>
+                                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-red-500 rounded-full"
+                                            style={{
+                                                width: `${(productStats.outOfStock / productStats.totalProducts) * 100}%`
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
+                        ) : (
+                            <div className="text-center py-8 text-gray-500">
+                                Loading stock data...
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-gray-600">Server Load</span>
-                                    <span className="text-sm font-medium text-emerald-600">42%</span>
+            {/* Third Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Recent Activity */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Recent Activity</CardTitle>
+                        <CardDescription>
+                            Latest system events and updates
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {logStats ? (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div className="p-4 bg-red-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-red-600">{logStats.errors}</div>
+                                        <div className="text-sm text-gray-600">Errors</div>
+                                    </div>
+                                    <div className="p-4 bg-amber-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-amber-600">{logStats.warnings}</div>
+                                        <div className="text-sm text-gray-600">Warnings</div>
+                                    </div>
+                                    <div className="p-4 bg-emerald-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-emerald-600">
+                                            {logStats.avgResponseTime}ms
+                                        </div>
+                                        <div className="text-sm text-gray-600">Avg Response</div>
+                                    </div>
                                 </div>
-                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-500 w-2/5"></div>
+
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-semibold">Top Endpoints</h4>
+                                    {logStats.topEndpoints.slice(0, 3).map((endpoint, index) => (
+                                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                            <code className="text-xs text-gray-700">{endpoint.endpoint}</code>
+                                            <Badge variant="secondary">{endpoint.count} requests</Badge>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-gray-600">Storage</span>
-                                    <span className="text-sm font-medium text-emerald-600">78% Used</span>
-                                </div>
-                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div className="h-full bg-amber-500 w-4/5"></div>
-                                </div>
+                        ) : (
+                            <div className="text-center py-8 text-gray-500">
+                                Loading activity data...
                             </div>
+                        )}
+                    </CardContent>
+                </Card>
 
-                            <div className="pt-6 border-t">
-                                <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Stats</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-gray-900">24</div>
-                                        <div className="text-xs text-gray-600">Today's Orders</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-gray-900">8</div>
-                                        <div className="text-xs text-gray-600">Pending Reviews</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-gray-900">15</div>
-                                        <div className="text-xs text-gray-600">Low Stock Items</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-gray-900">3</div>
-                                        <div className="text-xs text-gray-600">Support Tickets</div>
-                                    </div>
+                {/* Quick Actions */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Quick Actions</CardTitle>
+                        <CardDescription>
+                            Common administrative tasks
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button className="h-auto py-4 flex flex-col items-center justify-center space-y-2 bg-emerald-600 hover:bg-emerald-700">
+                                <Package className="h-6 w-6" />
+                                <span>Add Product</span>
+                            </Button>
+
+                            <Button variant="outline" className="h-auto py-4 flex flex-col items-center justify-center space-y-2">
+                                <ShoppingCart className="h-6 w-6" />
+                                <span>Process Orders</span>
+                            </Button>
+
+                            <Button variant="outline" className="h-auto py-4 flex flex-col items-center justify-center space-y-2">
+                                <Users className="h-6 w-6" />
+                                <span>Manage Users</span>
+                            </Button>
+
+                            <Button variant="outline" className="h-auto py-4 flex flex-col items-center justify-center space-y-2">
+                                <AlertCircle className="h-6 w-6" />
+                                <span>View Logs</span>
+                            </Button>
+                        </div>
+
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                            <h4 className="text-sm font-semibold mb-2">System Info</h4>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Last Updated</span>
+                                    <span className="font-medium">Just now</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Data Refresh</span>
+                                    <span className="font-medium">Auto (5min)</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Dashboard Version</span>
+                                    <span className="font-medium">v1.2.0</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </main>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
